@@ -1,0 +1,89 @@
+#!/bin/bash
+set -e
+
+if [ "$#" -lt 3 ]; then
+    echo "Usage: <path to input> <new filename[.webm]> <[g]ame,[c]omms,[m]ic> (timestamps, [00:00:00.000]-00:00:00.000) (bitrate, 2M)"
+    exit 1
+fi
+
+# read args
+SOURCE_FILE=$(realpath "$1")
+NEW_NAME=$(realpath "$2")
+
+START_TIMESTAMP="$4"
+END_TIMESTAMP=""
+
+NEW_BITRATE="$5"
+
+NAME_HASH=$(echo "$NEW_NAME" | md5sum | cut -d ' ' -f 1)
+
+TMP_FILE="/tmp/p1-${NAME_HASH}.txt"
+
+if [[ ! $NEW_NAME == *.webm ]]; then
+    NEW_NAME+=".webm"
+fi
+
+ARGS=(-i "$SOURCE_FILE")
+  
+if [[ -z "$NEW_BITRATE" ]]; then
+    NEW_BITRATE="2M"
+fi
+
+
+if [[ $START_TIMESTAMP == *"-"* ]]; then
+  arrTS=(${START_TIMESTAMP//-/ })
+  START_TIMESTAMP="${arrTS[0]}"
+  END_TIMESTAMP="${arrTS[1]}"
+fi
+
+if [[ ! -z "$START_TIMESTAMP" ]]; then
+    ARGS+=(-ss $START_TIMESTAMP)
+fi
+
+if [[ ! -z "$END_TIMESTAMP" ]]; then
+    ARGS+=(-to $END_TIMESTAMP)
+fi
+
+ARGS_2ND=(-row-mt 1 -c:a libopus)
+
+ENABLED_CHANNELS="$3"
+CHANNEL_GAME="[0:a:0]"
+CHANNEL_MIC="[0:a:1]"
+CHANNEL_COMMS="[0:a:2]"
+CHANNEL_COUNT=0
+CPX_CHANNELS_STR=""
+CPX_WEIGHTS=""
+
+if [[ $ENABLED_CHANNELS == *"g"* ]]; then
+  CHANNEL_COUNT=1
+  CPX_CHANNELS_STR="$CHANNEL_GAME"
+  CPX_WEIGHTS="1"
+fi
+
+if [[ $ENABLED_CHANNELS == *"m"* ]]; then
+  CHANNEL_COUNT=$((CHANNEL_COUNT + 1))
+  CPX_CHANNELS_STR+="$CHANNEL_MIC"
+  CPX_WEIGHTS+=" 7"
+fi
+
+if [[ $ENABLED_CHANNELS == *"c"* ]]; then
+  CHANNEL_COUNT=$((CHANNEL_COUNT + 1))
+  CPX_CHANNELS_STR+="$CHANNEL_COMMS"
+  CPX_WEIGHTS+=" 1"
+fi
+
+if [[ "$CHANNEL_COUNT" -gt 0 ]]; then
+  CPX_STR="${CPX_CHANNELS_STR}amix=${CHANNEL_COUNT}:longest:normalize=0:weights=${CPX_WEIGHTS}[aout]"
+  ARGS_2ND+=(-filter_complex "$CPX_STR" -map 0:V:0 -map "[aout]")
+fi
+
+ARGS+=(-vf scale=1680:-2 -c:v libvpx-vp9 -b:v $NEW_BITRATE -passlogfile "$TMP_FILE")
+ARGS_2ND+=("$NEW_NAME")
+
+echo "cmd1> ffmpeg ${ARGS[@]} -pass 1 -an -f null /dev/null"
+echo "cmd2> ffmpeg ${ARGS[@]} -pass 2 ${ARGS_2ND[@]}"
+
+ffmpeg "${ARGS[@]}" -pass 1 -an -f null /dev/null
+ffmpeg "${ARGS[@]}" -pass 2 "${ARGS_2ND[@]}"
+
+rm "$TMP_FILE-0.log"

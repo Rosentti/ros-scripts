@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -e
+
+hostname=$(cat /etc/hostname)
+if [[ $# -lt 1 ]]; then
+    echo "ros-update: <label-with-dashes-only>"
+    exit 1
+fi
+
+if [[ $1 = *" "* ]]; then
+    echo "invalid label, can't use spaces"
+    exit 2
+fi
+
+if [[ $1 = *"'"* ]]; then
+    echo "invalid label, can't use single quote"
+    exit 2
+fi
+
+if [[ $1 = *"\""* ]]; then
+    echo "invalid label, can't use quote"
+    exit 2
+fi
+
+cd "$ROS_NIXOS_CFG_SOURCE"
+
+if [ ! -f "$hostname.nix" ]; then
+    echo "Config not found for this host! Looked for '$ROS_NIXOS_CFG_SOURCE/$hostname.nix'"
+    exit 3
+fi
+
+cfg_target="/etc/nixos/"
+
+sudo rm -rf "$cfg_target"
+sudo mkdir "$cfg_target"
+sudo cp -R ./* "$cfg_target"
+sudo ln -sf "$cfg_target/$hostname.nix" "$cfg_target/configuration.nix"
+sudo chown -R root:root "$cfg_target"
+sudo chmod -R 664 "$cfg_target"
+sudo nixos-generate-config
+sudo env NIXOS_LABEL="$1" nixos-rebuild switch
+
+echo "build success!"
+git add --all
+git commit -m "$1"
+git push
