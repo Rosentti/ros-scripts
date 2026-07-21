@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -e
 
+if [ -z "$ROS_NIXOS_CFG_SOURCE" ]; then
+    echo "ROS_NIXOS_CFG_SOURCE is empty"
+    exit 1
+fi
+
+if [ -z "$ROS_NIXOS_CFG_TARGET" ]; then
+    echo "ROS_NIXOS_CFG_TARGET is empty"
+    exit 1
+fi
+
 hostname=$(hostname)
 if [[ $# -lt 1 ]]; then
     echo "ros-update: <label-with-dashes-only>"
@@ -29,13 +39,17 @@ if [ ! -f "$hostname.nix" ]; then
     exit 3
 fi
 
-cfg_target="/etc/nixos/"
+# copy the hw config into a "safe" place (this feels very wrong)
+sudo cp "$ROS_NIXOS_CFG_TARGET/hardware-configuration.nix" /tmp/hw-config.nix
 
-sudo rm -rf "$cfg_target"/*
-sudo cp -R ./* "$cfg_target"
-sudo ln -sf "$hostname.nix" "$cfg_target/configuration.nix"
-sudo chown -R root:root "$cfg_target"
-sudo chmod -R 664 "$cfg_target"
+# This seems a bit risky but it's probably fine (don't @ me if this destroys your root)
+sudo rm -rf "$ROS_NIXOS_CFG_TARGET"/*
+sudo cp /tmp/hw-config.nix "$ROS_NIXOS_CFG_TARGET/hardware-configuration.nix"
+
+sudo cp -R ./* "$ROS_NIXOS_CFG_TARGET"
+sudo ln -sf "$hostname.nix" "$ROS_NIXOS_CFG_TARGET/configuration.nix"
+sudo chown -R root:root "$ROS_NIXOS_CFG_TARGET"
+sudo chmod -R 664 "$ROS_NIXOS_CFG_TARGET"
 sudo env NIXOS_LABEL="$1" nixos-rebuild switch
 
 echo "build success!"
