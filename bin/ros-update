@@ -33,7 +33,7 @@ cfg_target="/etc/nixos/"
 
 sudo rm -rf "$cfg_target"/*
 sudo cp -R ./* "$cfg_target"
-sudo ln -sf "$cfg_target/$hostname.nix" "$cfg_target/configuration.nix"
+sudo ln -sf "$hostname.nix" "$cfg_target/configuration.nix"
 sudo chown -R root:root "$cfg_target"
 sudo chmod -R 664 "$cfg_target"
 sudo env NIXOS_LABEL="$1" nixos-rebuild switch
