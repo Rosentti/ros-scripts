@@ -31,8 +31,7 @@ fi
 
 cfg_target="/etc/nixos/"
 
-sudo rm -rf "$cfg_target"
-sudo mkdir "$cfg_target"
+sudo rm -rf "$cfg_target"/*
 sudo cp -R ./* "$cfg_target"
 sudo ln -sf "$cfg_target/$hostname.nix" "$cfg_target/configuration.nix"
 sudo chown -R root:root "$cfg_target"
