@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-hostname=$(cat /etc/hostname)
+hostname=$(hostname)
 if [[ $# -lt 1 ]]; then
     echo "ros-update: <label-with-dashes-only>"
     exit 1
