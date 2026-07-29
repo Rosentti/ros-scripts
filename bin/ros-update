@@ -11,7 +11,6 @@ if [ -z "$ROS_NIXOS_CFG_TARGET" ]; then
     exit 1
 fi
 
-hostname=$(hostname)
 if [[ $# -lt 1 ]]; then
     echo "ros-update: <label-with-dashes-only>"
     exit 1
@@ -19,27 +18,65 @@ fi
 
 if [[ $1 = *" "* ]]; then
     echo "invalid label, can't use spaces"
-    exit 2
+    exit 1
 fi
 
 if [[ $1 = *"'"* ]]; then
     echo "invalid label, can't use single quote"
-    exit 2
+    exit 1
 fi
 
 if [[ $1 = *"\""* ]]; then
     echo "invalid label, can't use quote"
-    exit 2
+    exit 1
 fi
 
 cd "$ROS_NIXOS_CFG_SOURCE"
 
+hostname=$(hostname)
 if [ ! -f "$hostname.nix" ]; then
     echo "Config not found for this host! Looked for '$ROS_NIXOS_CFG_SOURCE/$hostname.nix'"
-    exit 3
+    exit 2
 fi
 
-# copy the hw config into a "safe" place (this feels very wrong)
+operation=$2
+if [ -z "$operation" ]; then
+    operation="switch"
+fi
+
+internal_op=$operation
+if [[ "$operation" != "switch" && "$operation" != "boot" && "$operation" != "upgrade" ]]; then
+    echo "Operation must be one of 'switch' 'boot' or 'upgrade', got '$operation'"
+    exit 1
+fi
+
+if [[ $(git status --porcelain) && "$operation" == "upgrade" ]]; then
+    echo "Cannot upgrade with changes in the config file."
+    echo "Please add your config file changes as a separate generation"
+    exit 2
+fi
+
+flags=
+if [[ "$operation" == "upgrade" ]]; then
+    internal_op="boot"
+    flags="--upgrade"
+fi
+
+wget -q --spider https://cache.nixos.org/
+if [ $? -eq 0 ]; then
+    echo "Using online mode"
+else
+    if [[ "$operation" == "upgrade" ]]; then
+        echo "Nixos cache unavailable, not upgrading."
+        exit 3
+    fi
+
+    echo "Using offline mode, failed to contact nixos cache"
+    echo "Please manually push your changes when internet returns"
+    flags="--offline"
+fi
+
+# copy the hw config into a "safe" place (this is very wrong)
 sudo cp "$ROS_NIXOS_CFG_TARGET/hardware-configuration.nix" /tmp/hw-config.nix
 
 # This seems a bit risky but it's probably fine (don't @ me if this destroys your root)
@@ -50,9 +87,22 @@ sudo cp -R ./* "$ROS_NIXOS_CFG_TARGET"
 sudo ln -sf "$hostname.nix" "$ROS_NIXOS_CFG_TARGET/configuration.nix"
 sudo chown -R root:root "$ROS_NIXOS_CFG_TARGET"
 sudo chmod -R 664 "$ROS_NIXOS_CFG_TARGET"
-sudo env NIXOS_LABEL="$1" nixos-rebuild switch
+sudo env NIXOS_LABEL="$1" nixos-rebuild $flags $internal_op
 
 echo "build success!"
-git add --all
-git commit -m "$1"
-git push
+if [[ "$operation" == "upgrade" ]]; then
+    echo "Upgrade mode, not using git"
+else
+    if [ $(git status --porcelain) ]; then
+        echo "Detected changes, committing"
+        git add --all
+        git commit -m "$1"
+        if [[ "$flags" == "--offline" ]]; then
+            echo "Offline mode, not pushing changes."
+        else
+            git push
+        fi
+    else
+        echo "Didn't detect changes"
+    fi
+fi
