@@ -50,7 +50,7 @@ if [[ "$operation" != "switch" && "$operation" != "boot" && "$operation" != "upg
     exit 1
 fi
 
-if [[ $(git status --porcelain) && "$operation" == "upgrade" ]]; then
+if [[ "$operation" == "upgrade" ]] && [[ -n "$(git status --porcelain)" ]]; then
     echo "Cannot upgrade with changes in the config file."
     echo "Please add your config file changes as a separate generation"
     exit 2
@@ -93,7 +93,7 @@ echo "build success!"
 if [[ "$operation" == "upgrade" ]]; then
     echo "Upgrade mode, not using git"
 else
-    if [ $(git status --porcelain) ]; then
+    if [[ -n "$(git status --porcelain)" ]]; then
         echo "Detected changes, committing"
         git add --all
         git commit -m "$1"
