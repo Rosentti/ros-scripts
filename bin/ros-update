@@ -86,6 +86,8 @@ sudo chmod -R 664 "$ROS_NIXOS_CFG_TARGET"
 sudo env NIXOS_LABEL="$1" nixos-rebuild $flags build
 
 echo "build success!"
+set +e
+
 if [[ "$operation" == "upgrade" ]]; then
     echo "Upgrade mode, not using git"
 else
@@ -103,4 +105,5 @@ else
     fi
 fi
 
+sudo nix-env -p /nix/var/nix/profiles/system --set ./result
 sudo env NIXOS_LABEL="$1" ./result/bin/switch-to-configuration $internal_op
